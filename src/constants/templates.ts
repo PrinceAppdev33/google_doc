@@ -180,3 +180,19 @@ export const templates = [
     `,
   },
 ];
+
+// Additional business templates added
+export const BUSINESS_TEMPLATES = [
+  {
+    id: "meeting-notes",
+    label: "Meeting Notes",
+    imageUrl: "/templates/meeting-notes.svg",
+    initialContent: "<h1>Meeting Notes</h1><p>Date: </p><p>Attendees: </p><h2>Agenda</h2><ul><li></li></ul><h2>Action Items</h2><ul><li></li></ul>",
+  },
+  {
+    id: "project-proposal",
+    label: "Project Proposal",
+    imageUrl: "/templates/project-proposal.svg",
+    initialContent: "<h1>Project Proposal</h1><h2>Overview</h2><p></p><h2>Goals</h2><ul><li></li></ul><h2>Timeline</h2><p></p>",
+  },
+];
