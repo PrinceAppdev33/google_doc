@@ -170,3 +170,11 @@ convex/
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
+
+## Recent Updates
+
+- Added offline-aware banner for network status
+- Word count display in the document footer
+- Export document as HTML or plain text
+- Keyboard shortcut support via `useKeyPress` hook
+- New document templates: Meeting Notes, Project Proposal
