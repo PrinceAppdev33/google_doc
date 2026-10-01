@@ -1,6 +1,6 @@
 import { Liveblocks } from "@liveblocks/node";
 import { ConvexHttpClient } from "convex/browser";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import { api } from "../../../../convex/_generated/api";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -29,9 +29,28 @@ export async function POST(req: Request) {
   }
 
   const isOwner = document.ownerId === user.id;
-  const isOrganizationMember = !!(
+
+  // Check org membership via session claims first (fast path)
+  let isOrganizationMember = !!(
     document.organizationId && document.organizationId === sessionClaims.org_id
   );
+
+  // Fallback: verify via Clerk API in case the user hasn't activated the org
+  // context in their current session (org_id not present in sessionClaims)
+  if (!isOwner && !isOrganizationMember && document.organizationId) {
+    try {
+      const clerk = await clerkClient();
+      const membership = await clerk.organizations.getOrganizationMembershipList({
+        organizationId: document.organizationId,
+      });
+      isOrganizationMember = membership.data.some(
+        (m) => m.publicUserData?.userId === user.id
+      );
+    } catch {
+      // If the Clerk API call fails, deny access
+      isOrganizationMember = false;
+    }
+  }
 
   if (!isOwner && !isOrganizationMember) {
     return new Response("Unauthorized", { status: 401 });

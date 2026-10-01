@@ -13,10 +13,16 @@ export async function getDocuments(ids: Id<"documents">[]) {
 
 export async function getUsers() {
   const { sessionClaims } = await auth();
+
+  // If the user has no active org context, return empty list
+  if (!sessionClaims?.org_id) {
+    return [];
+  }
+
   const clerk = await clerkClient();
 
   const response = await clerk.users.getUserList({
-    organizationId: [sessionClaims?.org_id as string],
+    organizationId: [sessionClaims.org_id],
   });
 
   const users = response.data.map((user) => ({
