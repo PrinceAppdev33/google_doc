@@ -22,37 +22,63 @@ export async function POST(req: Request) {
   }
 
   const { room } = await req.json();
-  const document = await convex.query(api.documents.getById, { id: room });
+
+  let document: Awaited<ReturnType<typeof convex.query<typeof api.documents.getById>>> | null = null;
+  try {
+    document = await convex.query(api.documents.getById, { id: room });
+  } catch (err) {
+    console.error("[liveblocks-auth] Convex getById failed:", err);
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   if (!document) {
+    console.error("[liveblocks-auth] Document not found for room:", room);
     return new Response("Unauthorized", { status: 401 });
   }
 
   const isOwner = document.ownerId === user.id;
 
-  // Check org membership via session claims first (fast path)
+  // Fast path: session claims have the active org
   let isOrganizationMember = !!(
     document.organizationId && document.organizationId === sessionClaims.org_id
   );
 
-  // Fallback: verify via Clerk API in case the user hasn't activated the org
-  // context in their current session (org_id not present in sessionClaims)
+  console.log("[liveblocks-auth] Debug:", {
+    userId: user.id,
+    documentOwnerId: document.ownerId,
+    documentOrgId: document.organizationId,
+    sessionOrgId: sessionClaims.org_id,
+    isOwner,
+    isOrganizationMember,
+  });
+
+  // Fallback: check the user's own org memberships via Clerk API.
+  // This handles the case where the user is in the org but their Clerk session
+  // doesn't have org_id active (e.g., they logged in via personal workspace).
   if (!isOwner && !isOrganizationMember && document.organizationId) {
     try {
       const clerk = await clerkClient();
-      const membership = await clerk.organizations.getOrganizationMembershipList({
-        organizationId: document.organizationId,
+      // Get all orgs this specific user belongs to (avoids pagination issues
+      // of listing all org members)
+      const userMemberships = await clerk.users.getOrganizationMembershipList({
+        userId: user.id,
       });
-      isOrganizationMember = membership.data.some(
-        (m) => m.publicUserData?.userId === user.id
+      isOrganizationMember = userMemberships.data.some(
+        (m) => m.organization.id === document!.organizationId
       );
-    } catch {
-      // If the Clerk API call fails, deny access
+      console.log("[liveblocks-auth] Fallback org check:", {
+        userOrgIds: userMemberships.data.map((m) => m.organization.id),
+        documentOrgId: document.organizationId,
+        isOrganizationMember,
+      });
+    } catch (err) {
+      console.error("[liveblocks-auth] Clerk API fallback failed:", err);
       isOrganizationMember = false;
     }
   }
 
   if (!isOwner && !isOrganizationMember) {
+    console.error("[liveblocks-auth] Access denied — not owner and not org member");
     return new Response("Unauthorized", { status: 401 });
   }
 
